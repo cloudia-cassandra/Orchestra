@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orchestra — Devlog</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #0a0a0a;
+    --muted: #8a8a8a;
+    --line: #e4e4e4;
+    --line-strong: #cfcfcf;
+    --surface: #fafafa;
+    --font-display: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-body: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0a0a;
+      --ink: #f2f2f0;
+      --muted: #8f8f8f;
+      --line: #232323;
+      --line-strong: #333333;
+      --surface: #121212;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0a0a;
+    --ink: #f2f2f0;
+    --muted: #8f8f8f;
+    --line: #232323;
+    --line-strong: #333333;
+    --surface: #121212;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --ink: #0a0a0a;
+    --muted: #8a8a8a;
+    --line: #e4e4e4;
+    --line-strong: #cfcfcf;
+    --surface: #fafafa;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  a { color: inherit; }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Topbar ---------- */
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1.1rem 2rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .wordmark {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .wordmark span {
+    color: var(--muted);
+  }
+
+  .topnav {
+    display: flex;
+    gap: 1.4rem;
+    font-size: 0.86rem;
+    color: var(--muted);
+  }
+
+  .topnav a { text-decoration: none; }
+  .topnav a:hover, .topnav a.is-current { color: var(--ink); }
+  .topnav a.is-current { font-weight: 600; }
+
+  .clock {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Layout ---------- */
+
+  .layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr) 280px;
+    gap: 0;
+    min-height: 60vh;
+  }
+
+  .rail {
+    padding: 3rem 1.75rem;
+  }
+
+  .rail-left {
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    align-self: start;
+    position: sticky;
+    top: 0;
+  }
+
+  .rail-right {
+    border-left: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 2.25rem;
+  }
+
+  .rail-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.85rem;
+  }
+
+  .project-tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .project-tag strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .badge {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    padding: 0.3rem 0.55rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    color: var(--muted);
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.82rem;
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .meta-row:first-of-type { border-top: none; }
+
+  .meta-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .meta-label { color: var(--muted); text-align: right; }
+
+  .contact-link {
+    font-size: 0.82rem;
+    text-decoration: none;
+    border-bottom: 1px solid var(--line-strong);
+    padding-bottom: 0.15rem;
+    width: fit-content;
+  }
+
+  .phase-list { display: flex; flex-direction: column; }
+
+  .phase-row {
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .phase-row:first-child { border-top: none; }
+
+  .phase-num {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    padding-top: 0.15rem;
+  }
+
+  .phase-name {
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .phase-status {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-top: 0.15rem;
+  }
+
+  .phase-row.is-active .phase-name { color: var(--ink); }
+  .phase-row.is-active .phase-status { color: var(--ink); }
+  .phase-row.is-active .phase-num::before {
+    content: "";
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--ink);
+    margin-right: 0.4rem;
+    vertical-align: middle;
+  }
+
+  /* ---------- Main / entries ---------- */
+
+  .main { padding: 3rem 2.5rem 4rem; min-width: 0; }
+
+  .hero {
+    max-width: 30ch;
+    margin: 0 0 0.9rem;
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-size: clamp(2.6rem, 5vw, 4.2rem);
+    line-height: 0.98;
+    text-wrap: balance;
+  }
+
+  .hero-sub {
+    max-width: 56ch;
+    color: var(--muted);
+    font-size: 0.98rem;
+    line-height: 1.6;
+    margin: 0 0 3rem;
+  }
+
+  .entries {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .entry {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: 2rem;
+    padding: 2.4rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .entries .entry:first-child { border-top: 1px solid var(--line-strong); }
+
+  .entry-date {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    padding-top: 0.2rem;
+  }
+
+  .entry-kicker {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .entry-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.35rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.85rem;
+    text-wrap: balance;
+  }
+
+  .entry-body p {
+    max-width: 62ch;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--ink);
+    margin: 0 0 1rem;
+  }
+
+  .entry-body ul {
+    max-width: 62ch;
+    margin: 0 0 1rem;
+    padding-left: 1.1rem;
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .entry-body li { margin-bottom: 0.55rem; }
+  .entry-body li::marker { color: var(--muted); }
+  .entry-body strong { font-weight: 700; }
+
+  .entry-body code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+  }
+
+  /* ---------- Marquee ---------- */
+
+  .marquee {
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 1.4rem 0;
+  }
+
+  .marquee-track {
+    display: inline-flex;
+    animation: scroll-left 26s linear infinite;
+  }
+
+  .marquee-track span {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2rem, 6vw, 3.6rem);
+    letter-spacing: -0.01em;
+    padding-right: 3rem;
+    color: var(--ink);
+  }
+
+  @keyframes scroll-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track { animation: none; }
+    .marquee { overflow-x: auto; }
+  }
+
+  /* ---------- Footer ---------- */
+
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.4rem 2rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .footer strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    .rail-left, .rail-right {
+      border: none;
+      border-top: 1px solid var(--line);
+      position: static;
+      padding: 2rem;
+    }
+    .main { padding: 2.5rem 1.5rem; }
+    .entry { grid-template-columns: 1fr; gap: 0.6rem; }
+    .topbar { flex-wrap: wrap; row-gap: 0.6rem; }
+  }
+
+  @media (max-width: 560px) {
+    .topnav { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to devlog</a>
+
+<header class="topbar">
+  <div class="wordmark">CLAUDIA CASSANDRA <span>/ ORCHESTRA</span></div>
+  <nav class="topnav" aria-label="Site">
+    <a href="#" class="is-current">Devlog</a>
+    <a href="#phases">Phases</a>
+    <a href="https://github.com/cloudia-cassandra/Orchestra" target="_blank" rel="noopener">Repo</a>
+  </nav>
+  <time class="clock" id="clock"></time>
+</header>
+
+<div class="layout">
+  <aside class="rail rail-left">
+    <div>
+      <p class="rail-label">Project</p>
+      <p class="project-tag"><strong>Orchestra</strong><br>01 of 03</p>
+    </div>
+
+    <div>
+      <p class="rail-label">Stack</p>
+      <div class="badge-row">
+        <span class="badge">Python</span>
+        <span class="badge">LangGraph</span>
+        <span class="badge">Anthropic</span>
+        <span class="badge">Postgres</span>
+        <span class="badge">ChromaDB</span>
+        <span class="badge">Redis</span>
+        <span class="badge">Celery</span>
+        <span class="badge">Docker</span>
+      </div>
+    </div>
+
+    <div>
+      <p class="rail-label">Contact</p>
+      <a class="contact-link" href="mailto:cloudiacassandra@gmail.com">cloudiacassandra@gmail.com</a>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <h1 class="hero">Building Orchestra, logged as it happens.</h1>
+    <p class="hero-sub">
+      A running record of what got tried, what shipped, and what broke — for a multi-agent
+      orchestration platform I'm building end to end. Supervisor decomposition, specialist
+      delegation, persistent memory, human escalation, full observability. Updated as each phase
+      lands.
+    </p>
+
+    <div class="entries">
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;23<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 1.1 — the supervisor / specialist / reviewer hierarchy</h2>
+          <div class="entry-body">
+            <p>
+              Modeled the three-layer agent hierarchy as LangGraph nodes. The <strong>Supervisor</strong>
+              turns a raw task into a JSON execution plan, delegates one step at a time, and
+              synthesizes the final answer once every step is approved. Four <strong>Specialists</strong>
+              (research, data analysis, writing, code execution) share one base class with
+              domain-specific prompts — tool binding is stubbed for now, that's a separate ticket.
+              The <strong>Reviewer</strong> validates each specialist's output and, on rejection,
+              loops it back to the same specialist with feedback attached, up to two retries
+              before flagging <code>needs_escalation</code> — a placeholder hook for the
+              human-in-the-loop system in Phase 3.
+            </p>
+            <ul>
+              <li>All state flows through one shared <code>OrchestraState</code>, typed with Pydantic
+                schemas (<code>ExecutionPlan</code>, <code>SpecialistResult</code>, <code>ReviewVerdict</code>).</li>
+              <li>Routing between nodes is two small conditional-edge functions keyed off status
+                and the current step's domain.</li>
+              <li>8 structural tests pass with no API key needed — the reviewer's LLM call is mocked.</li>
+              <li>Haven't done a live end-to-end run yet — next step, once a key is in <code>.env</code>.</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;22<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Cool thing</span>
+          <h2 class="entry-title">Repo scaffolded, stack locked in</h2>
+          <div class="entry-body">
+            <p>
+              Set up the project shell: package layout for agents, orchestration, memory, tools,
+              human-in-the-loop, and observability. <code>pyproject.toml</code> pinned to the full
+              stack — LangGraph, the Anthropic SDK, MCP, Postgres + ChromaDB, Redis + Celery — plus
+              a <code>docker-compose.yml</code> to bring up the local services. No agent logic yet;
+              this is the shell everything else gets built into.
+            </p>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </main>
+
+  <aside class="rail rail-right" id="phases">
+    <div>
+      <p class="rail-label">This log</p>
+      <div class="meta-row"><span class="meta-num">2</span><span class="meta-label">Entries logged</span></div>
+      <div class="meta-row"><span class="meta-num">1/6</span><span class="meta-label">Phases underway</span></div>
+    </div>
+
+    <div>
+      <p class="rail-label">Phases</p>
+      <div class="phase-list">
+        <div class="phase-row is-active">
+          <span class="phase-num">01</span>
+          <div>
+            <div class="phase-name">Agent Architecture</div>
+            <div class="phase-status">In progress</div>
+          </div>
+        </div>
+        <div class="phase-row">
+          <span class="phase-num">02</span>
+          <div>
+            <div class="phase-name">Memory System</div>
+            <div class="phase-status">Planned</div>
+          </div>
+        </div>
+        <div class="phase-row">
+          <span class="phase-num">03</span>
+          <div>
+            <div class="phase-name">Human-in-the-Loop</div>
+            <div class="phase-status">Planned</div>
+          </div>
+        </div>
+        <div class="phase-row">
+          <span class="phase-num">04</span>
+          <div>
+            <div class="phase-name">Observability</div>
+            <div class="phase-status">Planned</div>
+          </div>
+        </div>
+        <div class="phase-row">
+          <span class="phase-num">05</span>
+          <div>
+            <div class="phase-name">Integration &amp; E2E Testing</div>
+            <div class="phase-status">Planned</div>
+          </div>
+        </div>
+        <div class="phase-row">
+          <span class="phase-num">06</span>
+          <div>
+            <div class="phase-name">Portfolio Polish</div>
+            <div class="phase-status">Planned</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="marquee" role="presentation">
+  <div class="marquee-track">
+    <span>ORCHESTRA — MULTI&#8209;AGENT DEVLOG — PROJECT 01 — ORCHESTRA — MULTI&#8209;AGENT DEVLOG — PROJECT 01 — </span>
+    <span>ORCHESTRA — MULTI&#8209;AGENT DEVLOG — PROJECT 01 — ORCHESTRA — MULTI&#8209;AGENT DEVLOG — PROJECT 01 — </span>
+  </div>
+</div>
+
+<footer class="footer">
+  <span>LOGGED AS I BUILD <strong>:)</strong></span>
+  <span>&copy; 2026</span>
+</footer>
+
+<script>
+  function updateClock() {
+    var el = document.getElementById('clock');
+    if (!el) return;
+    var now = new Date();
+    var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    el.textContent = now.toLocaleString('en-US', opts);
+  }
+  updateClock();
+  setInterval(updateClock, 30000);
+</script>
+
+</body>
+</html>
