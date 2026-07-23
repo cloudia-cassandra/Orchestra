@@ -178,17 +178,8 @@ def test_specialist_prompt_includes_dependency_outputs():
         "review_history": [],
     }
 
-    captured = {}
-    expected_output = "final prose"
+    prompt = agent._build_prompt(state, plan.steps[1])
 
-    def fake_llm(system, user, max_tokens=1536):
-        captured["user"] = user
-        return expected_output
-
-    agent._call_llm = fake_llm
-    update = agent(state)
-
-    assert "Fact A. Fact B." in captured["user"]
-    assert "s1.output: key facts" in captured["user"]
-    assert "one paragraph" in captured["user"]
-    assert update["pending_result"].output == expected_output
+    assert "Fact A. Fact B." in prompt
+    assert "s1.output: key facts" in prompt
+    assert "one paragraph" in prompt

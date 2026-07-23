@@ -1,11 +1,17 @@
 """Shared base class for every agent node in the graph."""
 
+import json
 import os
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from anthropic import Anthropic
 
 from orchestra.orchestration.state import OrchestraState
+
+if TYPE_CHECKING:
+    from orchestra.orchestration.schemas import Domain
+    from orchestra.tools.registry import ToolRegistry, ToolSpec
 
 _client: Anthropic | None = None
 
@@ -74,6 +80,70 @@ class BaseAgent(ABC):
         )
         tool_use = next(block for block in response.content if block.type == "tool_use")
         return tool_use.input
+
+    def _call_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: list["ToolSpec"],
+        registry: "ToolRegistry",
+        domain: "Domain",
+        max_iterations: int = 5,
+        max_tokens: int = 1536,
+    ) -> tuple[str, list[str]]:
+        """Run an agentic tool-use loop: let the model call registered tools until it's done.
+
+        Every tool call is routed through `registry.invoke()`, so authorization, rate
+        limiting, and invocation logging all apply exactly as they would to any other caller.
+        Returns (final_text, names_of_tools_called).
+        """
+        anthropic_tools = [
+            {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+            for t in tools
+        ]
+        messages: list[dict] = [{"role": "user", "content": user}]
+        tools_called: list[str] = []
+        response = None
+
+        for _ in range(max_iterations):
+            response = get_client().messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=system,
+                tools=anthropic_tools,
+                messages=messages,
+            )
+            messages.append({"role": "assistant", "content": response.content})
+
+            if response.stop_reason != "tool_use":
+                break
+
+            tool_results = []
+            for block in response.content:
+                if block.type != "tool_use":
+                    continue
+                tools_called.append(block.name)
+                try:
+                    output = registry.invoke(block.name, domain=domain, **block.input)
+                    tool_results.append(
+                        {"type": "tool_result", "tool_use_id": block.id, "content": json.dumps(output)}
+                    )
+                except Exception as exc:
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": str(exc),
+                            "is_error": True,
+                        }
+                    )
+            messages.append({"role": "user", "content": tool_results})
+        else:
+            # Ran out of iterations still asking for tools — return whatever text is there.
+            pass
+
+        final_text = "".join(b.text for b in response.content if b.type == "text") if response else ""
+        return final_text, tools_called
 
     @abstractmethod
     def __call__(self, state: OrchestraState) -> dict:

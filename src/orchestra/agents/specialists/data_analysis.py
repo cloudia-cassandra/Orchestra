@@ -9,5 +9,4 @@ class DataAnalysisAgent(SpecialistAgent):
     name = "data_analysis"
     domain = "data_analysis"
     system_prompt = SYSTEM_PROMPT
-    # Intended tools: sql_query, python_sandbox, dataframe_ops (bound in a later ticket)
-    tools = ["sql_query", "python_sandbox"]
+    tools = ["database_query", "code_execution", "file_read_write"]

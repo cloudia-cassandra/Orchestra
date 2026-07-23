@@ -9,5 +9,4 @@ class ResearchAgent(SpecialistAgent):
     name = "research"
     domain = "research"
     system_prompt = SYSTEM_PROMPT
-    # Intended tools: web_search, url_fetch, document_search (bound in a later ticket)
-    tools = ["web_search", "url_fetch"]
+    tools = ["web_search", "api_call"]

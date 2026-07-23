@@ -3,13 +3,14 @@
 from orchestra.agents.base import BaseAgent
 from orchestra.orchestration.schemas import Domain, PlanStep, SpecialistResult
 from orchestra.orchestration.state import OrchestraState
+from orchestra.tools.builtin import registry as default_registry
 
 
 class SpecialistAgent(BaseAgent):
     domain: Domain
     system_prompt: str
-    # Domain-specific tools get bound here once the tool framework (MCP + custom) lands;
-    # specialists are LLM-only for now.
+    # Names of tools (from the ToolRegistry) this specialist is allowed to call. Empty means
+    # LLM-only, no tool loop.
     tools: list[str] = []
 
     def __call__(self, state: OrchestraState) -> dict:
@@ -24,12 +25,21 @@ class SpecialistAgent(BaseAgent):
                 f"Address this feedback:\n{feedback}"
             )
 
-        output = self._call_llm(self.system_prompt, user_prompt)
+        tool_calls: list[str] = []
+        if self.tools:
+            tool_specs = [default_registry.get(name) for name in self.tools]
+            output, tool_calls = self._call_with_tools(
+                self.system_prompt, user_prompt, tool_specs, default_registry, self.domain
+            )
+        else:
+            output = self._call_llm(self.system_prompt, user_prompt)
+
         result = SpecialistResult(
             step_id=step.step_id,
             domain=self.domain,
             output=output,
             confidence=0.8,
+            tool_calls=tool_calls,
         )
         return {"pending_result": result, "status": "reviewing"}
 

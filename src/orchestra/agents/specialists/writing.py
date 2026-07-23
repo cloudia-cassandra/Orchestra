@@ -9,5 +9,4 @@ class WritingAgent(SpecialistAgent):
     name = "writing"
     domain = "writing"
     system_prompt = SYSTEM_PROMPT
-    # Intended tools: style_guide_lookup, grammar_check (bound in a later ticket)
-    tools = []
+    tools = ["file_read_write"]

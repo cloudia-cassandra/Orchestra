@@ -66,3 +66,35 @@ that actually makes the supervisor's plans trustworthy instead of just plausible
 9 new tests cover the DAG validator's rejection cases, the structured tool-call path (mocked),
 the retry-then-succeed path, and that a specialist's prompt actually contains a dependency's
 output. 17/17 passing, still no API key needed.
+
+## 2026-07-25
+
+**Tried this — and this is what happened:** Phase 1.3, the tool registry — this is what turns
+"specialists" from prompt-only LLM calls into agents that can actually go do something.
+
+- **A real `ToolRegistry`.** Every tool is registered with a name, description, input/output
+  JSON schema, the list of specialist domains allowed to use it, and a rate limit
+  (`max_calls` per `per_seconds`, sliding window). `registry.invoke()` is the single choke point
+  everything goes through — it checks domain authorization, enforces the rate limit, times the
+  call, and logs a structured record (inputs, output or error, latency, success/failure)
+  regardless of who's calling or whether it succeeded.
+- **Five tools, honestly scoped to what's actually wired up:**
+  - `web_search` — pluggable provider seam (`set_search_provider`); raises clearly until a real
+    provider is chosen, no fake results pretending to work.
+  - `file_read_write` — sandboxed to a `workspace/` directory, blocks path traversal.
+  - `code_execution` — runs Python in a subprocess with a timeout; process-isolated but
+    explicitly *not* network/resource-sandboxed yet — flagged as a hardening TODO before it
+    ever sees untrusted input.
+  - `database_query` — read-only, rejects anything that isn't a `SELECT` before it even opens a
+    connection.
+  - `api_call` — outbound HTTP blocked by default; only allowlisted hosts (via
+    `ORCHESTRA_API_ALLOWLIST`) are reachable, so a specialist can't be prompted into an SSRF.
+- **Specialists can now actually call tools.** Added an agentic tool-use loop
+  (`BaseAgent._call_with_tools`) — the model gets the specialist's registered tools, and if it
+  asks for one, the loop invokes it through the registry (so authorization/rate-limiting/logging
+  all still apply) and feeds the result back, up to 5 rounds. This was stubbed out back in 1.1 as
+  "a later ticket" — this was that ticket.
+
+13 new tests (registry authorization/rate-limiting/logging, each tool's guardrails, and one that
+fakes the Anthropic response shape to prove the tool loop really calls the registry and logs it).
+39/39 total, still zero API key or live services required.

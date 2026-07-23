@@ -9,5 +9,4 @@ class CodeExecutionAgent(SpecialistAgent):
     name = "code_execution"
     domain = "code_execution"
     system_prompt = SYSTEM_PROMPT
-    # Intended tools: sandboxed_shell, file_read_write (bound in a later ticket)
-    tools = ["sandboxed_shell"]
+    tools = ["code_execution", "file_read_write"]
