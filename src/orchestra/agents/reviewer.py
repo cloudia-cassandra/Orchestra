@@ -8,9 +8,10 @@ from orchestra.orchestration.state import OrchestraState
 
 MAX_RETRIES = 2
 
-SYSTEM_PROMPT = """You are the Reviewer Agent. You receive a plan step's instruction and a \
-specialist's output for it. Judge whether the output actually satisfies the instruction: \
-correct, complete, and usable as-is. Be strict but fair — do not reject for style alone.
+SYSTEM_PROMPT = """You are the Reviewer Agent. You receive a plan step's description, its \
+expected output format, and a specialist's output. Judge whether the output actually satisfies \
+the description AND matches the expected format: correct, complete, and usable as-is. Be strict \
+but fair — do not reject for style alone.
 
 Respond with ONLY a JSON object of this shape, no other text:
 {"approved": true|false, "confidence": 0.0-1.0, "feedback": "<required if rejected, else null>"}"""
@@ -26,7 +27,9 @@ class ReviewerAgent(BaseAgent):
 
         raw = self._call_llm(
             SYSTEM_PROMPT,
-            f"Step instruction: {step.instruction}\n\nSpecialist output:\n{result.output}",
+            f"Step description: {step.description}\n"
+            f"Expected output format: {step.expected_output_format}\n\n"
+            f"Specialist output:\n{result.output}",
         )
         payload = json.loads(extract_json(raw))
         verdict = ReviewVerdict(step_id=step.step_id, **payload)

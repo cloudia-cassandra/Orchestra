@@ -44,6 +44,37 @@ class BaseAgent(ABC):
         )
         return "".join(block.text for block in response.content if block.type == "text")
 
+    def _call_structured(
+        self,
+        system: str,
+        user: str,
+        tool_name: str,
+        tool_description: str,
+        input_schema: dict,
+        max_tokens: int = 2048,
+    ) -> dict:
+        """Force the model to respond via a single tool call, returning its input dict.
+
+        This is more reliable than asking the model to emit JSON in prose and regexing
+        it back out — the API enforces the schema's shape at the message level.
+        """
+        response = get_client().messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            system=system,
+            tools=[
+                {
+                    "name": tool_name,
+                    "description": tool_description,
+                    "input_schema": input_schema,
+                }
+            ],
+            tool_choice={"type": "tool", "name": tool_name},
+            messages=[{"role": "user", "content": user}],
+        )
+        tool_use = next(block for block in response.content if block.type == "tool_use")
+        return tool_use.input
+
     @abstractmethod
     def __call__(self, state: OrchestraState) -> dict:
         ...

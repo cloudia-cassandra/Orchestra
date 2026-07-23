@@ -1,8 +1,10 @@
 """Structural checks for the Phase 1 agent graph — no LLM calls, no API key needed."""
 
 from orchestra.orchestration.graph import SPECIALIST_DOMAINS, build_graph
-from orchestra.orchestration.schemas import ExecutionPlan, PlanStep, ReviewVerdict
+from orchestra.orchestration.schemas import ExecutionPlan, ReviewVerdict
 from orchestra.orchestration.state import OrchestraState
+
+from tests.helpers import make_step
 
 
 def test_graph_compiles_with_expected_nodes():
@@ -15,10 +17,7 @@ def test_graph_compiles_with_expected_nodes():
 def test_route_after_supervisor_picks_current_step_domain():
     from orchestra.orchestration.graph import route_after_supervisor
 
-    plan = ExecutionPlan(
-        reasoning="test",
-        steps=[PlanStep(step_id="s1", domain="writing", instruction="draft it")],
-    )
+    plan = ExecutionPlan(reasoning="test", steps=[make_step("s1", domain="writing")])
     state: OrchestraState = {"plan": plan, "current_step_index": 0, "status": "delegating"}
     assert route_after_supervisor(state) == "writing"
 
@@ -33,10 +32,7 @@ def test_route_after_supervisor_ends_when_complete():
 def test_route_after_review_retries_same_domain():
     from orchestra.orchestration.graph import route_after_review
 
-    plan = ExecutionPlan(
-        reasoning="test",
-        steps=[PlanStep(step_id="s1", domain="research", instruction="find it")],
-    )
+    plan = ExecutionPlan(reasoning="test", steps=[make_step("s1", domain="research")])
     state: OrchestraState = {"plan": plan, "current_step_index": 0, "status": "retrying"}
     assert route_after_review(state) == "research"
 
@@ -66,10 +62,7 @@ def test_reviewer_rejects_and_increments_retry_count(monkeypatch):
         lambda system, user, max_tokens=1536: '{"approved": false, "confidence": 0.4, "feedback": "too vague"}',
     )
 
-    plan = ExecutionPlan(
-        reasoning="test",
-        steps=[PlanStep(step_id="s1", domain="writing", instruction="draft it")],
-    )
+    plan = ExecutionPlan(reasoning="test", steps=[make_step("s1", domain="writing")])
     result = SpecialistResult(step_id="s1", domain="writing", output="...", confidence=0.5)
     state: OrchestraState = {
         "plan": plan,
@@ -96,10 +89,7 @@ def test_reviewer_escalates_after_max_retries(monkeypatch):
         lambda system, user, max_tokens=1536: '{"approved": false, "confidence": 0.2, "feedback": "still wrong"}',
     )
 
-    plan = ExecutionPlan(
-        reasoning="test",
-        steps=[PlanStep(step_id="s1", domain="writing", instruction="draft it")],
-    )
+    plan = ExecutionPlan(reasoning="test", steps=[make_step("s1", domain="writing")])
     result = SpecialistResult(step_id="s1", domain="writing", output="...", confidence=0.5)
     state: OrchestraState = {
         "plan": plan,

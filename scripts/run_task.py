@@ -20,7 +20,11 @@ def main() -> None:
 
     print("\n=== PLAN ===")
     for step in final_state["plan"].steps:
-        print(f"  [{step.domain}] {step.step_id}: {step.instruction}")
+        deps = f" (needs {', '.join(step.depends_on)})" if step.depends_on else ""
+        print(
+            f"  [{step.domain}/{step.estimated_complexity}] {step.step_id}{deps}: "
+            f"{step.description}"
+        )
 
     print("\n=== STATUS ===")
     print(final_state["status"])
