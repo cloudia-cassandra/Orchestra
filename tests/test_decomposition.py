@@ -96,7 +96,7 @@ def test_supervisor_plan_uses_structured_tool_call(monkeypatch):
 
     monkeypatch.setattr(agent, "_call_structured", fake_structured)
 
-    update = agent({"task": "explain something"})
+    update = agent({"task": "explain something", "task_id": "t1"})
 
     assert captured["tool_name"] == "submit_execution_plan"
     assert update["status"] == "executing"
@@ -146,7 +146,7 @@ def test_supervisor_retries_on_invalid_plan_then_succeeds(monkeypatch):
 
     monkeypatch.setattr(agent, "_call_structured", fake_structured)
 
-    update = agent({"task": "explain something"})
+    update = agent({"task": "explain something", "task_id": "t1"})
 
     assert calls["count"] == 2
     assert update["plan"].steps[0].step_id == "s1"

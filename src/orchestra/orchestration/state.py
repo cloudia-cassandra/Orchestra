@@ -25,6 +25,7 @@ def _merge_step_progress(left: dict[str, dict], right: dict[str, dict]) -> dict[
 
 class OrchestraState(TypedDict, total=False):
     task: str
+    task_id: str
     plan: ExecutionPlan | None
     status: Status
 

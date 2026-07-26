@@ -9,6 +9,7 @@ agent's job is everything else: producing the plan, and deciding when the plan i
 from pydantic import ValidationError
 
 from orchestra.agents.base import BaseAgent
+from orchestra.memory.working_memory import WorkingMemory
 from orchestra.orchestration.schemas import ExecutionPlan
 from orchestra.orchestration.state import OrchestraState
 from orchestra.orchestration.waves import is_plan_complete
@@ -116,6 +117,8 @@ class SupervisorAgent(BaseAgent):
                 f"Supervisor could not produce a valid execution plan after "
                 f"{_MAX_PLANNING_ATTEMPTS} attempts: {last_error}"
             )
+
+        WorkingMemory(state["task_id"]).set_plan(plan)
 
         return {
             "plan": plan,

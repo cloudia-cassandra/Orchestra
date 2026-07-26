@@ -18,7 +18,7 @@ def test_approval_marks_step_completed():
     plan = ExecutionPlan(reasoning="t", steps=[make_step("s1")])
     result = SpecialistResult(step_id="s1", domain="research", attempt=1, output="ok", confidence=0.8)
 
-    update = agent({"plan": plan, "pending_results": [result], "review_history": []})
+    update = agent({"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": []})
 
     assert update["completed_step_ids"] == ["s1"]
     assert update["specialist_results"] == [result]
@@ -31,7 +31,7 @@ def test_rejection_below_max_attempts_does_not_escalate():
     plan = ExecutionPlan(reasoning="t", steps=[make_step("s1")])
     result = SpecialistResult(step_id="s1", domain="research", attempt=1, output="ok", confidence=0.8)
 
-    update = agent({"plan": plan, "pending_results": [result], "review_history": []})
+    update = agent({"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": []})
 
     assert update["completed_step_ids"] == []
     assert update["escalations"] == []
@@ -46,7 +46,7 @@ def test_rejection_at_max_attempts_escalates():
         step_id="s1", domain="research", attempt=MAX_ATTEMPTS, output="ok", confidence=0.8
     )
 
-    update = agent({"plan": plan, "pending_results": [result], "review_history": []})
+    update = agent({"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": []})
 
     assert update["status"] == "needs_escalation"
     assert update["step_progress"] == {"s1": {"escalated": True}}
@@ -59,7 +59,7 @@ def test_low_confidence_escalates_even_if_approved():
     plan = ExecutionPlan(reasoning="t", steps=[make_step("s1")])
     result = SpecialistResult(step_id="s1", domain="research", attempt=1, output="ok", confidence=0.8)
 
-    update = agent({"plan": plan, "pending_results": [result], "review_history": []})
+    update = agent({"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": []})
 
     assert update["status"] == "needs_escalation"
     assert update["escalations"][0]["reason"] == "low_confidence"
@@ -76,7 +76,7 @@ def test_already_reviewed_attempt_is_skipped():
     prior_verdict = ReviewVerdict(step_id="s1", attempt=1, approved=True, confidence=0.9)
 
     update = agent(
-        {"plan": plan, "pending_results": [result], "review_history": [prior_verdict]}
+        {"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": [prior_verdict]}
     )
 
     assert update["review_history"] == []
@@ -99,7 +99,7 @@ def test_batches_multiple_pending_results_in_one_call():
     r1 = SpecialistResult(step_id="s1", domain="research", attempt=1, output="a", confidence=0.8)
     r2 = SpecialistResult(step_id="s2", domain="writing", attempt=1, output="b", confidence=0.8)
 
-    update = agent({"plan": plan, "pending_results": [r1, r2], "review_history": []})
+    update = agent({"plan": plan, "task_id": "t1", "pending_results": [r1, r2], "review_history": []})
 
     assert update["completed_step_ids"] == ["s1"]
     assert len(update["review_history"]) == 2

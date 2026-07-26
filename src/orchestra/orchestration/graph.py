@@ -20,6 +20,8 @@ synthesis -> delivery.
   that halt into an actual pause-for-a-human step instead of just stopping.
 """
 
+import uuid
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RetryPolicy, Send
@@ -30,6 +32,7 @@ from orchestra.agents.specialists.data_analysis import DataAnalysisAgent
 from orchestra.agents.specialists.research import ResearchAgent
 from orchestra.agents.specialists.writing import WritingAgent
 from orchestra.agents.supervisor import SupervisorAgent
+from orchestra.memory.working_memory import WorkingMemory
 from orchestra.orchestration.state import OrchestraState
 from orchestra.orchestration.waves import ready_steps
 
@@ -45,12 +48,18 @@ def intake_node(state: OrchestraState) -> dict:
     task = (state.get("task") or "").strip()
     if not task:
         raise ValueError("OrchestraState.task must be a non-empty string.")
-    return {"status": "planning"}
+
+    task_id = state.get("task_id") or uuid.uuid4().hex
+    WorkingMemory(task_id).set_task(task)
+    return {"task_id": task_id, "status": "planning"}
 
 
 def delivery_node(state: OrchestraState) -> dict:
-    # Nothing to transform — this is a named seam for Phase 4 to hook final-result
-    # logging/notification into, without cluttering the supervisor's synthesis logic.
+    # The task succeeded end to end — its working memory has done its job, so let it go.
+    # A task that instead halts in needs_escalation skips this node entirely (see
+    # route_after_reviewer/route_after_supervisor), leaving its memory in Redis for whoever
+    # picks up the escalation to inspect.
+    WorkingMemory(state["task_id"]).clear()
     return {}
 
 

@@ -18,6 +18,13 @@ def main() -> None:
     graph = build_graph()
     final_state = graph.invoke({"task": task}, config={"recursion_limit": 50})
 
+    print(f"=== TASK ID === {final_state['task_id']}")
+    if final_state.get("status") == "needs_escalation":
+        print(
+            "(escalated — working memory was NOT cleared; inspect with "
+            f"scripts/inspect_memory.py {final_state['task_id']})"
+        )
+
     print("\n=== PLAN ===")
     for step in final_state["plan"].steps:
         deps = f" (needs {', '.join(step.depends_on)})" if step.depends_on else ""

@@ -143,3 +143,40 @@ order like the old code did.
 LLM boundary, no API key) and asserts the actual dispatch order proves parallel execution
 happened, plus one proving a step that never gets approved correctly halts the whole run in
 `needs_escalation`. 47/47 total passing.
+
+## 2026-07-27
+
+**Tried this — and this is what happened:** Phase 2.1, short-term working memory — the first
+piece of the memory system, and the first thing in the project actually backed by Redis
+instead of living purely inside one Python process.
+
+Up to now, everything an agent needed (the plan, other steps' outputs, review feedback) only
+existed inside the LangGraph state for the duration of one `graph.invoke()` call — reasonable
+for running the pipeline, but it means the instant that call returns (or crashes), all of it is
+gone. There was nowhere to look at an in-flight or escalated task from outside that one process.
+
+- **`WorkingMemory`** (`src/orchestra/memory/working_memory.py`) is a thin Redis wrapper scoped
+  entirely to one `task_id` (`orchestra:wm:{task_id}:*` keys), holding exactly what the ticket
+  asked for: the execution plan, every subtask attempt as it happens ("intermediate results" —
+  including rejected ones, not just the final approved output), the approved output per
+  completed subtask, and an error log.
+- **It's a mirror, not a replacement.** The graph's own in-process state is still what drives
+  execution (Phase 1.4's wave scheduler depends on that being fast and synchronous) — Working
+  Memory is written to alongside it at every meaningful point (plan produced, each specialist
+  attempt, each approval, each error/escalation), so it's genuinely externally visible: any
+  other process can attach to Redis mid-run and see what's happened so far.
+- **Cleared on success, kept on escalation — on purpose.** The ticket says memory is "cleared
+  when the task completes," but a task that halts in `needs_escalation` hasn't completed, it's
+  waiting on a human — clearing its memory would erase exactly the context that human needs.
+  So `delivery` (the success path) calls `clear()`; the escalation path deliberately skips it.
+  Every key also carries a TTL as a backstop against a crash leaking keys forever.
+- **`scripts/inspect_memory.py`** — a second, independent script that reads a task's memory back
+  out of Redis by `task_id` alone. This is the actual proof the store is shared rather than just
+  an audit log written and never read: run a task, then inspect it from a completely separate
+  process.
+
+9 new tests against a small fake Redis client (no live server needed) covering round-trips for
+every field, TTLs actually being set, and that `clear()` only touches its own task's keys, plus
+a fixture (`tests/conftest.py`) that swaps in that fake Redis for every existing test so the
+whole suite — including the full end-to-end graph runs from 1.4 — still needs zero live
+services. 56/56 passing.

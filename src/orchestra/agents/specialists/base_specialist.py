@@ -1,6 +1,7 @@
 """Generic specialist node: executes the current plan step within its domain."""
 
 from orchestra.agents.base import BaseAgent
+from orchestra.memory.working_memory import WorkingMemory
 from orchestra.orchestration.schemas import Domain, PlanStep, SpecialistResult
 from orchestra.orchestration.state import OrchestraState
 from orchestra.tools.builtin import registry as default_registry
@@ -27,14 +28,20 @@ class SpecialistAgent(BaseAgent):
                 f"{feedback}"
             )
 
+        memory = WorkingMemory(state["task_id"])
+
         tool_calls: list[str] = []
-        if self.tools:
-            tool_specs = [default_registry.get(name) for name in self.tools]
-            output, tool_calls = self._call_with_tools(
-                self.system_prompt, user_prompt, tool_specs, default_registry, self.domain
-            )
-        else:
-            output = self._call_llm(self.system_prompt, user_prompt)
+        try:
+            if self.tools:
+                tool_specs = [default_registry.get(name) for name in self.tools]
+                output, tool_calls = self._call_with_tools(
+                    self.system_prompt, user_prompt, tool_specs, default_registry, self.domain
+                )
+            else:
+                output = self._call_llm(self.system_prompt, user_prompt)
+        except Exception as exc:
+            memory.append_error_log(step.step_id, str(exc), attempt=attempt, domain=self.domain)
+            raise
 
         result = SpecialistResult(
             step_id=step.step_id,
@@ -44,6 +51,7 @@ class SpecialistAgent(BaseAgent):
             confidence=0.8,
             tool_calls=tool_calls,
         )
+        memory.add_intermediate_result(result)
         return {
             "pending_results": [result],
             "step_progress": {step.step_id: {"attempts": attempt}},

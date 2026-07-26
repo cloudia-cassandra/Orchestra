@@ -10,6 +10,7 @@ at a time.
 import json
 
 from orchestra.agents.base import BaseAgent, extract_json
+from orchestra.memory.working_memory import WorkingMemory
 from orchestra.orchestration.schemas import PlanStep, ReviewVerdict, SpecialistResult
 from orchestra.orchestration.state import OrchestraState
 
@@ -30,6 +31,7 @@ class ReviewerAgent(BaseAgent):
 
     def __call__(self, state: OrchestraState) -> dict:
         plan = state["plan"]
+        memory = WorkingMemory(state["task_id"])
         steps_by_id = {s.step_id: s for s in plan.steps}
         already_reviewed = {(v.step_id, v.attempt) for v in state.get("review_history", [])}
 
@@ -65,9 +67,13 @@ class ReviewerAgent(BaseAgent):
                         "confidence": verdict.confidence,
                     }
                 )
+                memory.append_error_log(
+                    step.step_id, f"escalated: {reason}", attempt=result.attempt, feedback=verdict.feedback
+                )
             elif verdict.approved:
                 specialist_results.append(result)
                 completed_step_ids.append(step.step_id)
+                memory.add_completed_output(result)
 
         return {
             "review_history": review_history,

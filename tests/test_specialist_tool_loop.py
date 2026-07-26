@@ -78,6 +78,7 @@ def test_specialist_tool_loop_invokes_registry_and_returns_final_text(monkeypatc
     )
     state = {
         "plan": plan,
+        "task_id": "t1",
         "active_step_id": "s1",
         "step_progress": {},
         "specialist_results": [],
