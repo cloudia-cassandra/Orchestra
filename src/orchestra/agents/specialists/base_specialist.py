@@ -15,14 +15,16 @@ class SpecialistAgent(BaseAgent):
 
     def __call__(self, state: OrchestraState) -> dict:
         plan = state["plan"]
-        step = plan.steps[state["current_step_index"]]
+        step = next(s for s in plan.steps if s.step_id == state["active_step_id"])
+        attempt = state.get("step_progress", {}).get(step.step_id, {}).get("attempts", 0) + 1
 
         user_prompt = self._build_prompt(state, step)
         feedback = self._latest_rejection_feedback(state, step.step_id)
         if feedback:
             user_prompt += (
                 f"\n\nA reviewer rejected your previous attempt at this step. "
-                f"Address this feedback:\n{feedback}"
+                f"Address this feedback — try a different approach, not the same one again:\n"
+                f"{feedback}"
             )
 
         tool_calls: list[str] = []
@@ -37,11 +39,15 @@ class SpecialistAgent(BaseAgent):
         result = SpecialistResult(
             step_id=step.step_id,
             domain=self.domain,
+            attempt=attempt,
             output=output,
             confidence=0.8,
             tool_calls=tool_calls,
         )
-        return {"pending_result": result, "status": "reviewing"}
+        return {
+            "pending_results": [result],
+            "step_progress": {step.step_id: {"attempts": attempt}},
+        }
 
     def _build_prompt(self, state: OrchestraState, step: PlanStep) -> str:
         parts = [f"Task: {step.description}"]

@@ -68,6 +68,7 @@ class ExecutionPlan(BaseModel):
 class SpecialistResult(BaseModel):
     step_id: str
     domain: Domain
+    attempt: int = Field(ge=1, description="1-indexed attempt number for this step.")
     output: str
     confidence: float = Field(ge=0.0, le=1.0)
     tool_calls: list[str] = Field(default_factory=list)
@@ -75,6 +76,7 @@ class SpecialistResult(BaseModel):
 
 class ReviewVerdict(BaseModel):
     step_id: str
+    attempt: int = Field(ge=1, description="Which attempt of the step this verdict judges.")
     approved: bool
     confidence: float = Field(ge=0.0, le=1.0)
     feedback: str | None = None

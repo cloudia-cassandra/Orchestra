@@ -1,10 +1,17 @@
-"""Supervisor Agent: decomposes the task, delegates one step at a time, synthesizes the result."""
+"""Supervisor Agent: decomposes the task, tracks wave progress, synthesizes the final result.
+
+Dispatch itself — fanning out to whichever steps are ready this wave — lives in the graph's
+conditional edge (orchestration/graph.py, using orchestration/waves.py), since LangGraph's
+`Send` mechanism only works from a conditional edge function, not from inside a node. This
+agent's job is everything else: producing the plan, and deciding when the plan is done.
+"""
 
 from pydantic import ValidationError
 
 from orchestra.agents.base import BaseAgent
 from orchestra.orchestration.schemas import ExecutionPlan
 from orchestra.orchestration.state import OrchestraState
+from orchestra.orchestration.waves import is_plan_complete
 
 PLANNING_PROMPT = """You are the Supervisor Agent in a multi-agent system. Decompose the user's \
 task into an ordered list of subtasks and submit it via the submit_execution_plan tool.
@@ -75,7 +82,11 @@ class SupervisorAgent(BaseAgent):
     def __call__(self, state: OrchestraState) -> dict:
         if state.get("plan") is None:
             return self._plan(state)
-        return self._advance(state)
+        if state.get("status") == "needs_escalation":
+            return {}
+        if is_plan_complete(state):
+            return {"final_output": self._synthesize(state), "status": "complete"}
+        return {"status": "executing"}
 
     def _plan(self, state: OrchestraState) -> dict:
         user_prompt = f"Task: {state['task']}"
@@ -108,19 +119,14 @@ class SupervisorAgent(BaseAgent):
 
         return {
             "plan": plan,
-            "current_step_index": 0,
-            "retry_count": 0,
+            "status": "executing",
+            "step_progress": {},
+            "completed_step_ids": [],
+            "pending_results": [],
             "specialist_results": [],
             "review_history": [],
-            "status": "delegating",
+            "escalations": [],
         }
-
-    def _advance(self, state: OrchestraState) -> dict:
-        plan = state["plan"]
-        next_index = state["current_step_index"] + 1
-        if next_index >= len(plan.steps):
-            return {"final_output": self._synthesize(state), "status": "complete"}
-        return {"current_step_index": next_index, "retry_count": 0, "status": "delegating"}
 
     def _synthesize(self, state: OrchestraState) -> str:
         results = "\n\n".join(

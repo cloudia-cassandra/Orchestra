@@ -28,6 +28,12 @@ def main() -> None:
 
     print("\n=== STATUS ===")
     print(final_state["status"])
+    print(f"Completed: {len(final_state.get('completed_step_ids', []))}/{len(final_state['plan'].steps)}")
+
+    if final_state.get("escalations"):
+        print("\n=== ESCALATIONS ===")
+        for esc in final_state["escalations"]:
+            print(f"  {esc['step_id']} (attempt {esc['attempt']}): {esc['reason']} — {esc['feedback']}")
 
     print("\n=== FINAL OUTPUT ===")
     print(final_state.get("final_output"))

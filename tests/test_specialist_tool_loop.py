@@ -78,15 +78,19 @@ def test_specialist_tool_loop_invokes_registry_and_returns_final_text(monkeypatc
     )
     state = {
         "plan": plan,
-        "current_step_index": 0,
+        "active_step_id": "s1",
+        "step_progress": {},
         "specialist_results": [],
         "review_history": [],
     }
 
     update = agent(state)
 
-    assert update["pending_result"].output == "Orchestra is a multi-agent platform."
-    assert update["pending_result"].tool_calls == ["web_search"]
+    result = update["pending_results"][0]
+    assert result.output == "Orchestra is a multi-agent platform."
+    assert result.tool_calls == ["web_search"]
+    assert result.attempt == 1
+    assert update["step_progress"] == {"s1": {"attempts": 1}}
     assert len(registry.invocation_log) == 1
     assert registry.invocation_log[0].tool_name == "web_search"
     assert registry.invocation_log[0].success is True

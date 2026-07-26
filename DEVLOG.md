@@ -98,3 +98,48 @@ output. 17/17 passing, still no API key needed.
 13 new tests (registry authorization/rate-limiting/logging, each tool's guardrails, and one that
 fakes the Anthropic response shape to prove the tool loop really calls the registry and logs it).
 39/39 total, still zero API key or live services required.
+
+## 2026-07-26
+
+**Tried this — and this is what happened:** Phase 1.4, the LangGraph state machine — this is
+where the graph stopped being "one step at a time" and became a real scheduler.
+
+The old graph tracked a single `current_step_index` and ran the plan strictly in list order.
+That's fine for a linear plan, but it meant two independent steps (say, a research lookup and a
+data pull that don't depend on each other) would run one after another for no reason, and
+there was no notion of confidence-based escalation at all. Rebuilt it properly:
+
+- **Wave-based scheduling.** Every round, the supervisor's routing function
+  (`orchestration/waves.ready_steps`) finds every step whose dependencies are already
+  satisfied and fans out to all of them at once via LangGraph's `Send` — that's the "parallel"
+  half. A step with an unmet dependency just isn't ready yet, so it naturally waits for a later
+  wave — that's the "sequential" half, both from the same mechanism instead of two code paths.
+  Proved this isn't just a claim with a test that tracks dispatch order: two independent steps
+  land in the same wave, and the dependent step only dispatches after both finish.
+- **Rejection routes back to the specialist, same as before — just implicitly now.** A step
+  that's neither completed nor escalated is automatically "still ready" next wave, so the
+  reviewer's feedback (already injected into the specialist's prompt since 1.2) is what drives
+  the retry. No separate retry-edge needed.
+- **Two escalation triggers, not one.** Previously only "rejected 3 times" escalated. Now the
+  reviewer also escalates on low confidence (< 0.5) even if it approved the output — an
+  uncertain "yes" still isn't good enough to ship without a human, and a rejection at the last
+  allowed attempt escalates the same way. Both dead-end into `needs_escalation`, a real halt
+  state (not silently continuing on a broken step) — Phase 3 turns that halt into an actual
+  pause-for-human instead of just stopping.
+- **Specialist-node crashes get LangGraph's own retry_policy** (3 attempts, backoff) — this is
+  separate from reviewer-driven retries: it's for the node *crashing* (API hiccup, rate limit),
+  not the node succeeding with output the reviewer doesn't like.
+- **Explicit `intake` and `delivery` nodes** bookend the graph now, matching the requested
+  pipeline shape (intake → planning → execution → review → synthesis → delivery) and giving
+  Phase 4 a clean seam to hook tracing into later.
+
+Batching turned out to matter: reviewing happens once per wave, not once per step, since
+LangGraph fans multiple parallel specialist branches back into a single reviewer call. Had to
+add `attempt` numbers to both `SpecialistResult` and `ReviewVerdict` so the reviewer can tell
+which attempt of which step it's looking at across that batch, instead of guessing from list
+order like the old code did.
+
+8 new tests, including one that runs the whole compiled graph end-to-end (fully mocked at the
+LLM boundary, no API key) and asserts the actual dispatch order proves parallel execution
+happened, plus one proving a step that never gets approved correctly halts the whole run in
+`needs_escalation`. 47/47 total passing.

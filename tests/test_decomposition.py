@@ -99,8 +99,9 @@ def test_supervisor_plan_uses_structured_tool_call(monkeypatch):
     update = agent({"task": "explain something"})
 
     assert captured["tool_name"] == "submit_execution_plan"
-    assert update["status"] == "delegating"
-    assert update["current_step_index"] == 0
+    assert update["status"] == "executing"
+    assert update["completed_step_ids"] == []
+    assert update["step_progress"] == {}
     assert [s.step_id for s in update["plan"].steps] == ["s1", "s2"]
 
 
@@ -171,9 +172,10 @@ def test_specialist_prompt_includes_dependency_outputs():
     )
     state = {
         "plan": plan,
-        "current_step_index": 1,
         "specialist_results": [
-            SpecialistResult(step_id="s1", domain="research", output="Fact A. Fact B.", confidence=0.9)
+            SpecialistResult(
+                step_id="s1", domain="research", attempt=1, output="Fact A. Fact B.", confidence=0.9
+            )
         ],
         "review_history": [],
     }
