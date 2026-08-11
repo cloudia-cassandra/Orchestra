@@ -6,12 +6,19 @@ the whole thing reaches synthesis and delivery.
 """
 
 from orchestra.agents.base import BaseAgent
+from orchestra.agents.memory_writer import MemoryWriterAgent
 from orchestra.agents.specialists.code_execution import CodeExecutionAgent
 from orchestra.agents.specialists.data_analysis import DataAnalysisAgent
 from orchestra.agents.specialists.research import ResearchAgent
 from orchestra.agents.specialists.writing import WritingAgent
 from orchestra.agents.supervisor import SupervisorAgent
 from orchestra.orchestration.graph import build_graph
+
+_MEMORY_EXTRACTION = {
+    "approach_summary": "researched then wrote it up",
+    "domain_facts": [],
+    "user_preferences": [],
+}
 
 _PLAN = {
     "reasoning": "two independent lookups feed a writeup",
@@ -60,6 +67,7 @@ def test_full_run_dispatches_independent_steps_in_parallel_then_the_dependent_st
 
     monkeypatch.setattr(BaseAgent, "_call_llm", _fake_call_llm)
     monkeypatch.setattr(SupervisorAgent, "_call_structured", lambda *a, **k: _PLAN)
+    monkeypatch.setattr(MemoryWriterAgent, "_call_structured", lambda *a, **k: _MEMORY_EXTRACTION)
 
     for agent_cls in (ResearchAgent, DataAnalysisAgent, WritingAgent, CodeExecutionAgent):
         monkeypatch.setattr(agent_cls, "tools", [])
@@ -113,6 +121,7 @@ def test_full_run_escalates_when_reviewer_never_approves(monkeypatch):
 
     monkeypatch.setattr(BaseAgent, "_call_llm", always_reject)
     monkeypatch.setattr(SupervisorAgent, "_call_structured", lambda *a, **k: plan_one_step)
+    monkeypatch.setattr(MemoryWriterAgent, "_call_structured", lambda *a, **k: _MEMORY_EXTRACTION)
     monkeypatch.setattr(ResearchAgent, "tools", [])
 
     graph = build_graph()
@@ -120,5 +129,21 @@ def test_full_run_escalates_when_reviewer_never_approves(monkeypatch):
 
     assert result["status"] == "needs_escalation"
     assert result["escalations"][0]["step_id"] == "s1"
-    assert result["escalations"][0]["reason"] == "max_attempts_exceeded"
+    assert result["escalations"][0]["reason"] == "specialist_failed_twice"
     assert "final_output" not in result or result["final_output"] is None
+
+    # An escalated task still gets remembered (Phase 2.3) — with what didn't work, not what did
+    # — and its working memory must survive (delivery, which clears it, is skipped on escalation).
+    from orchestra.memory.redis_client import get_redis_client
+    from orchestra.memory.working_memory import WorkingMemory
+
+    assert get_redis_client().get(WorkingMemory(result["task_id"])._key("task")) is not None
+
+    # Phase 3.2: the escalation also lands in the approval queue, ready for a human.
+    from orchestra.hitl.approval_queue import ApprovalQueue
+
+    pending = ApprovalQueue().list_pending()
+    assert len(pending) == 1
+    assert pending[0].task_id == result["task_id"]
+    assert pending[0].reason == "specialist_failed_twice"
+    assert pending[0].current_step_id == "s1"

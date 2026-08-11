@@ -31,6 +31,34 @@ def extract_json(text: str) -> str:
     return text[start : end + 1]
 
 
+def call_structured(
+    model: str,
+    system: str,
+    user: str,
+    tool_name: str,
+    tool_description: str,
+    input_schema: dict,
+    max_tokens: int = 2048,
+) -> dict:
+    """Force the model to respond via a single tool call, returning its input dict.
+
+    More reliable than asking for JSON in prose and regexing it back out — the API enforces the
+    schema's shape at the message level. Free function (not a `BaseAgent` method) so callers that
+    aren't graph nodes — e.g. memory consolidation, which runs as maintenance, not per-task — can
+    use it without pretending to be one. `BaseAgent._call_structured` is a thin wrapper over this.
+    """
+    response = get_client().messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system,
+        tools=[{"name": tool_name, "description": tool_description, "input_schema": input_schema}],
+        tool_choice={"type": "tool", "name": tool_name},
+        messages=[{"role": "user", "content": user}],
+    )
+    tool_use = next(block for block in response.content if block.type == "tool_use")
+    return tool_use.input
+
+
 class BaseAgent(ABC):
     """A LangGraph node: reads OrchestraState, returns a partial state update."""
 
@@ -64,22 +92,9 @@ class BaseAgent(ABC):
         This is more reliable than asking the model to emit JSON in prose and regexing
         it back out — the API enforces the schema's shape at the message level.
         """
-        response = get_client().messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=system,
-            tools=[
-                {
-                    "name": tool_name,
-                    "description": tool_description,
-                    "input_schema": input_schema,
-                }
-            ],
-            tool_choice={"type": "tool", "name": tool_name},
-            messages=[{"role": "user", "content": user}],
+        return call_structured(
+            self.model, system, user, tool_name, tool_description, input_schema, max_tokens
         )
-        tool_use = next(block for block in response.content if block.type == "tool_use")
-        return tool_use.input
 
     def _call_with_tools(
         self,

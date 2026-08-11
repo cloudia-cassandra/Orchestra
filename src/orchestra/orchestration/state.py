@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from orchestra.orchestration.schemas import ExecutionPlan, ReviewVerdict, SpecialistResult
 
-Status = Literal["planning", "executing", "needs_escalation", "complete"]
+Status = Literal["planning", "executing", "needs_escalation", "rejected", "complete"]
 
 
 def _merge_step_progress(left: dict[str, dict], right: dict[str, dict]) -> dict[str, dict]:
@@ -26,6 +26,10 @@ def _merge_step_progress(left: dict[str, dict], right: dict[str, dict]) -> dict[
 class OrchestraState(TypedDict, total=False):
     task: str
     task_id: str
+    user_id: str
+    # Set by the caller at invoke time (Phase 3.1) to force human review regardless of how
+    # confident the supervisor or reviewer end up being — e.g. graph.invoke({..., "user_requested_review": True}).
+    user_requested_review: bool
     plan: ExecutionPlan | None
     status: Status
 

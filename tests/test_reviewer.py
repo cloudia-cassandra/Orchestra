@@ -1,7 +1,9 @@
 """Tests for the Phase 1.4 batched Reviewer Agent: approval, rejection, and both escalation
-triggers (max attempts exhausted, low confidence)."""
+triggers (specialist failed twice, low quality score) — see Phase 3.1 (hitl/triggers.py) for
+where those thresholds and reason names now live."""
 
-from orchestra.agents.reviewer import MAX_ATTEMPTS, ReviewerAgent
+from orchestra.agents.reviewer import ReviewerAgent
+from orchestra.hitl.triggers import SPECIALIST_FAILURE_LIMIT
 from orchestra.orchestration.schemas import ExecutionPlan, SpecialistResult
 
 from tests.helpers import make_step
@@ -26,7 +28,7 @@ def test_approval_marks_step_completed():
     assert update["status"] != "needs_escalation"
 
 
-def test_rejection_below_max_attempts_does_not_escalate():
+def test_rejection_below_failure_limit_does_not_escalate():
     agent = _agent_with_verdict('{"approved": false, "confidence": 0.9, "feedback": "too short"}')
     plan = ExecutionPlan(reasoning="t", steps=[make_step("s1")])
     result = SpecialistResult(step_id="s1", domain="research", attempt=1, output="ok", confidence=0.8)
@@ -39,22 +41,22 @@ def test_rejection_below_max_attempts_does_not_escalate():
     assert update["review_history"][0].approved is False
 
 
-def test_rejection_at_max_attempts_escalates():
+def test_rejection_at_failure_limit_escalates():
     agent = _agent_with_verdict('{"approved": false, "confidence": 0.9, "feedback": "still wrong"}')
     plan = ExecutionPlan(reasoning="t", steps=[make_step("s1")])
     result = SpecialistResult(
-        step_id="s1", domain="research", attempt=MAX_ATTEMPTS, output="ok", confidence=0.8
+        step_id="s1", domain="research", attempt=SPECIALIST_FAILURE_LIMIT, output="ok", confidence=0.8
     )
 
     update = agent({"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": []})
 
     assert update["status"] == "needs_escalation"
     assert update["step_progress"] == {"s1": {"escalated": True}}
-    assert update["escalations"][0]["reason"] == "max_attempts_exceeded"
+    assert update["escalations"][0]["reason"] == "specialist_failed_twice"
     assert update["completed_step_ids"] == []
 
 
-def test_low_confidence_escalates_even_if_approved():
+def test_low_quality_score_escalates_even_if_approved():
     agent = _agent_with_verdict('{"approved": true, "confidence": 0.2, "feedback": null}')
     plan = ExecutionPlan(reasoning="t", steps=[make_step("s1")])
     result = SpecialistResult(step_id="s1", domain="research", attempt=1, output="ok", confidence=0.8)
@@ -62,7 +64,7 @@ def test_low_confidence_escalates_even_if_approved():
     update = agent({"plan": plan, "task_id": "t1", "pending_results": [result], "review_history": []})
 
     assert update["status"] == "needs_escalation"
-    assert update["escalations"][0]["reason"] == "low_confidence"
+    assert update["escalations"][0]["reason"] == "low_quality_score"
     assert update["completed_step_ids"] == []
 
 

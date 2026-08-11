@@ -31,6 +31,13 @@ class PlanStep(BaseModel):
 
 class ExecutionPlan(BaseModel):
     reasoning: str
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="The supervisor's own honest confidence that this plan, executed as "
+        "written, will actually satisfy the task.",
+    )
     steps: list[PlanStep]
 
     @model_validator(mode="after")

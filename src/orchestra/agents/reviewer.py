@@ -10,12 +10,10 @@ at a time.
 import json
 
 from orchestra.agents.base import BaseAgent, extract_json
+from orchestra.hitl.triggers import QUALITY_SCORE_THRESHOLD, SPECIALIST_FAILURE_LIMIT
 from orchestra.memory.working_memory import WorkingMemory
 from orchestra.orchestration.schemas import PlanStep, ReviewVerdict, SpecialistResult
 from orchestra.orchestration.state import OrchestraState
-
-MAX_ATTEMPTS = 3
-LOW_CONFIDENCE_THRESHOLD = 0.5
 
 SYSTEM_PROMPT = """You are the Reviewer Agent. You receive a plan step's description, its \
 expected output format, and a specialist's output. Judge whether the output actually satisfies \
@@ -52,11 +50,11 @@ class ReviewerAgent(BaseAgent):
             verdict = self._review_one(step, result)
             review_history.append(verdict)
 
-            low_confidence = verdict.confidence < LOW_CONFIDENCE_THRESHOLD
-            exhausted = not verdict.approved and result.attempt >= MAX_ATTEMPTS
+            low_quality = verdict.confidence < QUALITY_SCORE_THRESHOLD
+            failed_twice = not verdict.approved and result.attempt >= SPECIALIST_FAILURE_LIMIT
 
-            if low_confidence or exhausted:
-                reason = "low_confidence" if low_confidence else "max_attempts_exceeded"
+            if low_quality or failed_twice:
+                reason = "low_quality_score" if low_quality else "specialist_failed_twice"
                 step_progress[step.step_id] = {"escalated": True}
                 escalations.append(
                     {

@@ -470,6 +470,210 @@
     <div class="entries">
 
       <article class="entry">
+        <div class="entry-date">AUG&nbsp;10<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 3.2 — the approval queue</h2>
+          <div class="entry-body">
+            <p>
+              The part that makes an escalation actually pause-and-wait instead of just
+              halting. A new graph node packages the full context — task, plan, completed
+              steps, the step awaiting a decision, the agent's proposed action — and pushes it
+              to Postgres, the first real use of Postgres in this project (working memory lives
+              in Redis, long-term memory in Chroma, deliberately). Resuming didn't need
+              LangGraph's checkpointer machinery: everything needed to keep going already lives
+              in the graph's own state, so resuming just means reconstructing that state, folding
+              in the human's decision, and calling the graph again.
+            </p>
+            <p>
+              Three decisions, two shapes. Step-level escalations support <strong>approve</strong>
+              (output accepted as-is), <strong>reject</strong> (sent back for another attempt with
+              the reviewer's feedback — the same channel automated rejections already use), and
+              <strong>modify</strong> (the reviewer's edited output accepted instead). Plan-level
+              escalations only support approve (run the plan) or reject (the task ends outright —
+              nothing partial to retry); modify is rejected with a clear error rather than faking
+              a whole edited plan. Two review surfaces — a CLI and a Streamlit dashboard — share
+              the same decide-then-resume path underneath. 104/104 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">AUG&nbsp;10<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 3.1 — escalation triggers</h2>
+          <div class="entry-body">
+            <p>
+              Started Phase 3 (Human-in-the-Loop) by defining, in one place, every condition
+              that sends a task to a human. <strong>Low plan confidence</strong> — the supervisor
+              now self-reports a confidence score on the whole plan, checked before any
+              specialist runs. <strong>Sensitive operation</strong> — a plan step's own text gets
+              keyword-matched for financial transactions, data deletion, or external
+              communication, deliberately not asked of the model. <strong>Specialist failed
+              twice</strong> — tightened from a 3rd attempt to a 2nd. <strong>Low quality
+              score</strong> — the reviewer's existing low-confidence trigger, renamed to match.
+              <strong>User requested</strong> — a new flag on the incoming task forces escalation
+              regardless of how confident anything downstream is. All five route through the
+              existing escalation path; the plan-level ones now short-circuit before a single
+              specialist dispatches, not just after one fails. 90/90 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">AUG&nbsp;10<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 2.4 — memory management</h2>
+          <div class="entry-body">
+            <p>
+              Long-term memory now has upkeep instead of just growing forever. Records carry a
+              <code>user_id</code> (a new concept — nothing tracked "who" before this), an
+              access count, and a last-accessed timestamp. <strong>Importance</strong> blends
+              access frequency with recency decay and re-ranks retrieval, so a frequently-useful
+              memory can beat a barely-more-relevant one nobody's touched again.
+              <strong>Expiration</strong> deletes memories that are both old and rarely accessed.
+              <strong>Consolidation</strong> clusters near-duplicate same-outcome memories per
+              user and merges them into one summary via a structured LLM call. A Streamlit
+              <strong>dashboard</strong> shows what's remembered about a user, with buttons to
+              consolidate or delete; a companion script gives the same deletion path as a CLI —
+              the "delete endpoint" for a data request, honestly scoped to a project with no
+              HTTP server yet. 79/79 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;31<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 2.3 — memory retrieval feeds planning</h2>
+          <div class="entry-body">
+            <p>
+              Memory records now capture the <strong>outcome</strong> (succeeded or escalated)
+              and the plan steps used, not just prose. <code>MemoryWriterAgent</code> now runs on
+              escalated tasks too, not just successful ones, so failed approaches get remembered
+              as "don't do this again" instead of just dropped. The supervisor's planning prompt
+              shows retrieved memories with their outcome, past plan, and any facts or
+              preferences, so a new plan can lean on what worked and avoid what didn't. Escalated
+              tasks still skip <code>delivery</code>, so their working memory survives in Redis
+              for a human to inspect. 65/65 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;30<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 2.2 — long-term semantic memory</h2>
+          <div class="entry-body">
+            <p>
+              Added <code>LongTermMemory</code>, backed by ChromaDB: after a task completes, a
+              new <code>MemoryWriterAgent</code> node extracts the approach, domain facts, and
+              user preferences worth remembering and stores them, and the supervisor queries it
+              before planning so past approaches inform new plans. <code>tools_used</code> is read
+              straight from state rather than asked of the model, to avoid a hallucinated tool
+              name. Tested against a fake in-memory Chroma stand-in — no live server or embedding
+              model needed. 62/62 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;30<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">New direction</span>
+          <h2 class="entry-title">What Orchestra is actually for</h2>
+          <div class="entry-body">
+            <p>
+              Decided to stop being a generic orchestration demo and aim at a concrete use case:
+              a <strong>research assistant for faculty</strong> — triage newly published papers
+              in a field, summarize methodology, and flag contradictions against a professor's
+              current findings, escalating uncertain or conflicting results to a human instead of
+              guessing. The orchestration core stays domain-agnostic; this becomes the flagship
+              application built on top of it, not a rewrite. No real lab data gets ingested.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;27<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 2.1 — short-term working memory</h2>
+          <div class="entry-body">
+            <p>
+              Added <code>WorkingMemory</code>, a Redis mirror of in-flight task state (plan,
+              every attempt, approved outputs, errors), scoped per <code>task_id</code> — the
+              first state visible outside a single <code>graph.invoke()</code> call. Cleared on
+              success, kept on escalation so a human can inspect it. Tests run against a fake
+              Redis client, no live server needed. 56/56 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;26<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 1.4 — wave-based scheduler</h2>
+          <div class="entry-body">
+            <p>
+              Replaced strict step-by-step execution with wave-based dispatch: every round, all
+              steps whose dependencies are satisfied fan out in parallel via LangGraph
+              <code>Send</code>; dependent steps wait for a later wave. Escalation now triggers
+              on repeated rejection or low reviewer confidence (below 0.5). Explicit
+              <code>intake</code>/<code>delivery</code> bookend nodes added. 47/47 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;25<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 1.3 — tool registry</h2>
+          <div class="entry-body">
+            <p>
+              Built a real <code>ToolRegistry</code> — every call goes through domain
+              authorization, rate limiting, and logging. Five tools: <code>web_search</code>,
+              <code>file_read_write</code> (sandboxed), <code>code_execution</code> (subprocess,
+              timeout, not yet resource-sandboxed), <code>database_query</code> (read-only), and
+              <code>api_call</code> (allowlisted hosts only). Specialists can now actually call
+              tools via an agentic loop. 39/39 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
+        <div class="entry-date">JUL&nbsp;24<br>2026</div>
+        <div class="entry-body-wrap">
+          <span class="entry-kicker">Tried this</span>
+          <h2 class="entry-title">Phase 1.2 — task decomposition</h2>
+          <div class="entry-body">
+            <p>
+              Plans are now forced structured tool-calls instead of regex'd JSON, and validated
+              as a proper DAG (no duplicate, unknown, self, or forward-reference dependencies).
+              Specialists actually receive their dependencies' outputs now. Invalid plans get fed
+              back to the model for up to three retries instead of silently continuing broken.
+              17/17 tests passing.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry">
         <div class="entry-date">JUL&nbsp;23<br>2026</div>
         <div class="entry-body-wrap">
           <span class="entry-kicker">Tried this</span>
@@ -501,7 +705,7 @@
       <article class="entry">
         <div class="entry-date">JUL&nbsp;22<br>2026</div>
         <div class="entry-body-wrap">
-          <span class="entry-kicker">Cool thing</span>
+          <span class="entry-kicker">Started my cool thing</span>
           <h2 class="entry-title">Repo scaffolded, stack locked in</h2>
           <div class="entry-body">
             <p>
@@ -521,32 +725,32 @@
   <aside class="rail rail-right" id="phases">
     <div>
       <p class="rail-label">This log</p>
-      <div class="meta-row"><span class="meta-num">2</span><span class="meta-label">Entries logged</span></div>
-      <div class="meta-row"><span class="meta-num">1/6</span><span class="meta-label">Phases underway</span></div>
+      <div class="meta-row"><span class="meta-num">11</span><span class="meta-label">Entries logged</span></div>
+      <div class="meta-row"><span class="meta-num">3/6</span><span class="meta-label">Phases underway</span></div>
     </div>
 
     <div>
       <p class="rail-label">Phases</p>
       <div class="phase-list">
-        <div class="phase-row is-active">
+        <div class="phase-row">
           <span class="phase-num">01</span>
           <div>
             <div class="phase-name">Agent Architecture</div>
-            <div class="phase-status">In progress</div>
+            <div class="phase-status">Done</div>
           </div>
         </div>
         <div class="phase-row">
           <span class="phase-num">02</span>
           <div>
             <div class="phase-name">Memory System</div>
-            <div class="phase-status">Planned</div>
+            <div class="phase-status">Done</div>
           </div>
         </div>
-        <div class="phase-row">
+        <div class="phase-row is-active">
           <span class="phase-num">03</span>
           <div>
             <div class="phase-name">Human-in-the-Loop</div>
-            <div class="phase-status">Planned</div>
+            <div class="phase-status">WIP</div>
           </div>
         </div>
         <div class="phase-row">

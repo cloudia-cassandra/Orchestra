@@ -5,6 +5,7 @@ from langgraph.types import Send
 from orchestra.orchestration.graph import (
     SPECIALIST_DOMAINS,
     build_graph,
+    route_after_memory_writer,
     route_after_reviewer,
     route_after_supervisor,
 )
@@ -17,18 +18,18 @@ from tests.helpers import make_step
 def test_graph_compiles_with_expected_nodes():
     compiled = build_graph()
     node_names = set(compiled.get_graph().nodes)
-    expected = {"intake", "supervisor", "reviewer", "delivery", *SPECIALIST_DOMAINS}
+    expected = {"intake", "supervisor", "reviewer", "memory_writer", "delivery", *SPECIALIST_DOMAINS}
     assert expected.issubset(node_names)
 
 
 def test_route_after_supervisor_ends_when_complete():
     state: OrchestraState = {"status": "complete"}
-    assert route_after_supervisor(state) == "delivery"
+    assert route_after_supervisor(state) == "memory_writer"
 
 
-def test_route_after_supervisor_ends_on_escalation():
+def test_route_after_supervisor_routes_escalation_to_memory_writer():
     state: OrchestraState = {"status": "needs_escalation"}
-    assert route_after_supervisor(state) == "end"
+    assert route_after_supervisor(state) == "memory_writer"
 
 
 def test_route_after_supervisor_fans_out_to_ready_steps():
@@ -90,9 +91,17 @@ def test_route_after_supervisor_ends_on_deadlock():
     assert route_after_supervisor(state) == "end"
 
 
-def test_route_after_reviewer_ends_on_escalation():
-    assert route_after_reviewer({"status": "needs_escalation"}) == "end"
+def test_route_after_reviewer_routes_escalation_to_memory_writer():
+    assert route_after_reviewer({"status": "needs_escalation"}) == "memory_writer"
 
 
 def test_route_after_reviewer_returns_to_supervisor_otherwise():
     assert route_after_reviewer({"status": "executing"}) == "supervisor"
+
+
+def test_route_after_memory_writer_goes_to_delivery_when_complete():
+    assert route_after_memory_writer({"status": "complete"}) == "delivery"
+
+
+def test_route_after_memory_writer_routes_to_approval_queue_without_delivery_when_escalated():
+    assert route_after_memory_writer({"status": "needs_escalation"}) == "approval_queue"
